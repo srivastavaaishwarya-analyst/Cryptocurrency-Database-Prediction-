@@ -1,0 +1,198 @@
+import sqlite3
+import pandas as pd
+from pathlib import Path
+import matplotlib.pyplot as plt
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+DB_PATH = SCRIPT_DIR / "market_data.db"
+
+print("SCRIPT_DIR =", SCRIPT_DIR)
+print("DB_PATH =", DB_PATH)
+print("DB exists =", DB_PATH.exists())
+
+if not DB_PATH.exists():
+    raise FileNotFoundError(f"Database file not found at: {DB_PATH}")
+
+conn = sqlite3.connect(str(DB_PATH))
+
+prices_summary = pd.read_sql("""
+SELECT asset, frequency, COUNT(*) AS row_count
+FROM asset_prices
+GROUP BY asset, frequency
+ORDER BY asset
+""", conn)
+print("\nRow counts in asset_prices:")
+print(prices_summary)
+
+features_summary = pd.read_sql("""
+SELECT asset, COUNT(*) AS row_count
+FROM asset_features
+GROUP BY asset
+ORDER BY asset
+""", conn)
+print("\nRow counts in asset_features:")
+print(features_summary)
+
+volatility_summary = pd.read_sql("""
+SELECT asset,
+       AVG(volatility_7d) AS avg_volatility_7d
+FROM asset_features
+WHERE volatility_7d IS NOT NULL
+GROUP BY asset
+ORDER BY avg_volatility_7d DESC
+""", conn)
+print("\nVolatility summary:")
+print(volatility_summary)
+
+## RETURNS ## 
+return_summary = pd.read_sql("""
+SELECT asset,
+       AVG(return_1d) AS avg_return_1d,
+       MIN(return_1d) AS min_return_1d,
+       MAX(return_1d) AS max_return_1d
+FROM asset_features
+WHERE return_1d IS NOT NULL
+GROUP BY asset
+ORDER BY avg_return_1d DESC
+""", conn)
+
+print("\nReturn summary:")
+print(return_summary)
+
+## ETH vs NASDAQ
+eth_nasdaq = pd.read_sql("""
+SELECT a.date,
+       a.return_1d AS eth_return,
+       b.return_1d AS nasdaq_return
+FROM asset_features a
+JOIN asset_features b
+  ON a.date = b.date
+WHERE a.asset = 'eth'
+  AND b.asset = 'nasdaq'
+  AND a.return_1d IS NOT NULL
+  AND b.return_1d IS NOT NULL
+ORDER BY a.date
+""", conn)
+
+print("\nETH vs NASDAQ sample:")
+print(eth_nasdaq.head(10))
+
+print("\nETH vs NASDAQ correlation:")
+print(eth_nasdaq[["eth_return", "nasdaq_return"]].corr())
+
+## SOL vs NASDAQ
+sol_nasdaq = pd.read_sql("""
+SELECT a.date,
+       a.return_1d AS sol_return,
+       b.return_1d AS nasdaq_return
+FROM asset_features a
+JOIN asset_features b
+  ON a.date = b.date
+WHERE a.asset = 'sol'
+  AND b.asset = 'nasdaq'
+  AND a.return_1d IS NOT NULL
+  AND b.return_1d IS NOT NULL
+ORDER BY a.date
+""", conn)
+
+print("\nSOL vs NASDAQ sample:")
+print(sol_nasdaq.head(10))
+
+print("\nSOL vs NASDAQ correlation:")
+print(sol_nasdaq[["sol_return", "nasdaq_return"]].corr())
+
+## RETURN COMPARISON ## 
+return_summary = pd.read_sql("""
+SELECT asset,
+       AVG(return_1d) AS avg_return_1d,
+       MIN(return_1d) AS min_return_1d,
+       MAX(return_1d) AS max_return_1d
+FROM asset_features
+WHERE return_1d IS NOT NULL
+GROUP BY asset
+ORDER BY avg_return_1d DESC
+""", conn)
+
+print("\nReturn summary:")
+print(return_summary)
+
+## ETH vs. NASDAQ CORRELATION ##
+eth_nasdaq = pd.read_sql("""
+SELECT a.date,
+       a.return_1d AS eth_return,
+       b.return_1d AS nasdaq_return
+FROM asset_features a
+JOIN asset_features b
+  ON a.date = b.date
+WHERE a.asset = 'eth'
+  AND b.asset = 'nasdaq'
+  AND a.return_1d IS NOT NULL
+  AND b.return_1d IS NOT NULL
+ORDER BY a.date
+""", conn)
+
+print("\nETH vs NASDAQ sample:")
+print(eth_nasdaq.head(10))
+
+print("\nETH vs NASDAQ correlation:")
+print(eth_nasdaq[["eth_return", "nasdaq_return"]].corr())
+
+## SOL vs. NASDAQ ##
+sol_nasdaq = pd.read_sql("""
+SELECT a.date,
+       a.return_1d AS sol_return,
+       b.return_1d AS nasdaq_return
+FROM asset_features a
+JOIN asset_features b
+  ON a.date = b.date
+WHERE a.asset = 'sol'
+  AND b.asset = 'nasdaq'
+  AND a.return_1d IS NOT NULL
+  AND b.return_1d IS NOT NULL
+ORDER BY a.date
+""", conn)
+
+print("\nSOL vs NASDAQ sample:")
+print(sol_nasdaq.head(10))
+
+print("\nSOL vs NASDAQ correlation:")
+print(sol_nasdaq[["sol_return", "nasdaq_return"]].corr())
+
+
+conn.close()
+
+
+# Bar chart: average volatility
+# Clean asset labels for consistency
+volatility_summary["asset"] = volatility_summary["asset"].replace({
+    "sol": "SOL",
+    "eth": "ETH",
+    "sp500": "S&P 500",
+    "nasdaq": "NASDAQ",
+    "gold": "Gold",
+    "CRUDE OIL": "Crude Oil"
+})
+
+# Bar chart
+ax = volatility_summary.plot(
+    x="asset",
+    y="avg_volatility_7d",
+    kind="bar",
+    legend=False
+)
+
+plt.title("Average 7-Day Volatility Across Asset Classes")
+plt.xlabel("Asset")
+plt.ylabel("Average 7-Day Volatility")
+plt.xticks(rotation=30)
+
+# Add value labels on top of bars
+for i, v in enumerate(volatility_summary["avg_volatility_7d"]):
+    plt.text(i, v + 0.001, f"{v:.3f}", ha='center')
+
+plt.tight_layout()
+
+# Save high-quality version for report
+plt.savefig("volatility_chart.png", dpi=300)
+
+plt.show()
